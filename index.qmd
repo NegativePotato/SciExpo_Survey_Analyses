@@ -182,7 +182,7 @@ combined_long.df <-
   mutate(score = responses_str_to_nbr(response))
   
 write.csv(combined_long.df, file = file.path(table_dir, "all_participants_long.csv"))
-
+saveRDS(combined_long_only_full_participants.df, file = file.path(table_dir, "participants_who_answered_both_surveys_long.rds"))
 ```
 
 ```{r ids-which-sessions}
@@ -237,6 +237,7 @@ attend_last_year_count.df <- combined_long_only_full_participants.df %>%
 attend_last_year_count.df
 
 write.csv(combined_long_only_full_participants.df, file = file.path(table_dir, "participants_who_answered_both_surveys_long.csv"))
+saveRDS(combined_long_only_full_participants.df, file = file.path(table_dir, "participants_who_answered_both_surveys_long.rds"))
 
 ```
 
