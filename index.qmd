@@ -30,6 +30,7 @@ library(here)
 library(Hmisc)
 
 data_dir <- file.path(here(), "Data")
+table_dir <- file.path(here(), "Tables")
 ```
 
 ```{r functions}
@@ -182,7 +183,7 @@ combined_long.df <-
   mutate(score = responses_str_to_nbr(response))
   
 write.csv(combined_long.df, file = file.path(table_dir, "all_participants_long.csv"))
-saveRDS(combined_long_only_full_participants.df, file = file.path(table_dir, "participants_who_answered_both_surveys_long.rds"))
+saveRDS(combined_long.df, file = file.path(table_dir, "all_participants_long.rds"))
 ```
 
 ```{r ids-which-sessions}
@@ -192,18 +193,43 @@ saveRDS(combined_long_only_full_participants.df, file = file.path(table_dir, "pa
 # Find the IDs that are in both sessions
 which_sessions.df <- combined_long.df %>% 
   filter(!is.na(score)) %>%
-  select(survey_id, prepost) %>% 
+  select(survey_id, prepost, attend_sciexpo_this_year, attend_sciexpo_last_year, 
+         under_represented) %>% 
   unique(.) %>% 
-  group_by(survey_id) %>% 
-  dplyr::summarize(session_completed = paste(prepost, collapse = " & ")) 
+  group_by(survey_id, attend_sciexpo_this_year, attend_sciexpo_last_year,
+           under_represented) %>% 
+  dplyr::summarize(session_completed = paste(prepost, collapse = " & ")) %>% 
+  ungroup()
 
 which_sessions_count.df <- which_sessions.df %>% 
   count(session_completed)
 
+which_sessions_count_by_attendance.df <- which_sessions.df %>% 
+  count(session_completed, attend_sciexpo_this_year, attend_sciexpo_last_year,
+        under_represented) %>% 
+  mutate(attend_sciexpo_this_year = ifelse(attend_sciexpo_this_year == "Yes", 
+                                           "Attended This Year", "Did NOT Attend This Year"), 
+         attend_sciexpo_last_year = ifelse(attend_sciexpo_last_year == "Yes", 
+                                           "Attended Last Year", "Did NOT Attend Last Year"),
+         session_completed = ifelse(session_completed == "pre", "Pre Only", session_completed),
+         session_completed = ifelse(session_completed == "post", "Post Only", session_completed),
+         session_completed = ifelse(session_completed == "pre & post", "Pre & Post", session_completed),
+         session_completed = factor(session_completed, 
+                                    levels = c("Pre & Post", "Pre Only", "Post Only"))) %>% 
+  relocate(attend_sciexpo_this_year, session_completed, attend_sciexpo_last_year, 
+           under_represented) %>% 
+  arrange(attend_sciexpo_this_year, session_completed, desc(attend_sciexpo_last_year)) %>% 
+  mutate(included_in_baseline = ifelse(session_completed %in% c("Pre & Post", "Pre Only"),
+                                       "In Baseline", ""),
+         included_in_prepost = ifelse(session_completed == "Pre & Post" & 
+                                        attend_sciexpo_this_year == "Attended This Year",
+                                       "In Prepost", ""), 
+         under_represented = gsub("\n", "", under_represented, fixed = T))
+which_sessions_count_by_attendance.df
+
 ids_in_both_sessions.df <- which_sessions.df %>% 
   filter(session_completed %in% c('pre', 'post')) %>% 
   .$survey_id
-
 ```
 
 ```{r under-represented-count}
@@ -241,15 +267,22 @@ saveRDS(combined_long_only_full_participants.df, file = file.path(table_dir, "pa
 
 ```
 
-In total, we collected responses from `n_nonhurm` students, with `n_hurm` from historically under-represented minorities (HURM) and `n_nonhurm` not from historically under-represented minorities (Non-HURM). Note that we do not have this information for `n_hurm_na` students because they only completed the post-test survey, and we only asked this information in the pre-test survey. 
+In total, we collected responses from `r n_nonhurm` students, with `r n_hurm` from historically under-represented minorities (HURM) and `r n_nonhurm` not from historically under-represented minorities (Non-HURM). Note that we do not have this information for `r n_hurm_na` students because they only completed the post-test survey, and we only asked this information in the pre-test survey. 
 
 The number of participants who completed each survey is as follows: 
 ```{r which-sessions-display}
 #| echo: false
 
-print(as.data.frame(which_sessions_count.df))
+knitr::kable(which_sessions_count.df)
 ```
 
+Detailed table of the number of participants who completed each survey, attended which sciexpo, and depending on their minority status: 
+```{r which-sessions-detailed-display}
+#| echo: false
+
+knitr::kable(which_sessions_count_by_attendance.df)
+# print(as.data.frame(which_sessions_count_by_attendance.df))
+```
 
 # Descriptives
 
@@ -505,7 +538,7 @@ prepost_descriptives_only_this_year.plot
 prepost_long_aggregated_any_attendance.df <- 
   prepost_long_by_participant.df %>% 
   group_by(questionnaire, subscale, under_represented, prepost, 
-           attend_sciexpo_last_year, attend_sciexpo_this_year) %>% 
+           attend_sciexpo_this_year) %>% 
   compute_dvs(score_aggregate)
 
 prepost_long_aggregated_any_attendance.df <- 
@@ -513,7 +546,7 @@ prepost_long_aggregated_any_attendance.df <-
   filter(attend_sciexpo_this_year == "Yes")
 
 sample_sizes_all.df <- prepost_long_aggregated_any_attendance.df %>% 
-  select(under_represented, attend_sciexpo_last_year, n) %>% 
+  select(under_represented, n) %>% 
   unique()
 n_nonhurm <- sample_sizes_all.df %>% filter(under_represented == "Non-\nHURM") %>% .$n %>% sum()
 n_hurm <- sample_sizes_all.df %>% filter(under_represented == "HURM") %>% .$n %>% sum()
